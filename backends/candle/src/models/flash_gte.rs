@@ -1,10 +1,13 @@
 use crate::flash_attn::flash_attn_varlen;
+#[cfg(not(feature = "cuda"))]
+use crate::layers::apply_rotary;
 use crate::layers::{get_cos_sin, get_inv_freqs, index_select, LayerNorm, Linear};
 use crate::models::gte::{GTEClassificationHead, GTEConfig, GTEMLP};
 use crate::models::{Model, PositionEmbeddingType};
 
 use candle::{DType, Device, IndexOp, Result, Tensor};
 use candle_nn::{Embedding, Module, VarBuilder};
+#[cfg(feature = "cuda")]
 use candle_rotary::apply_rotary_inplace;
 use text_embeddings_backend_core::{Batch, ModelType, Pool};
 
@@ -75,7 +78,16 @@ impl GTEAttention {
         let k = qkv.narrow(1, self.num_attention_heads, self.num_attention_heads)?;
         let v = qkv.narrow(1, self.num_attention_heads * 2, self.num_attention_heads)?;
 
+        #[cfg(feature = "cuda")]
         apply_rotary_inplace(&q, &k, &cos, &sin, true)?;
+        #[cfg(not(feature = "cuda"))]
+        let (q, k) = {
+            let cos = cos.unsqueeze(1)?;
+            let sin = sin.unsqueeze(1)?;
+            let q = apply_rotary(&q, &cos, &sin, self.attention_head_size)?;
+            let k = apply_rotary(&k, &cos, &sin, self.attention_head_size)?;
+            (q, k)
+        };
 
         let attention = flash_attn_varlen(
             &q,
@@ -166,12 +178,12 @@ pub struct FlashGTEModel {
 impl FlashGTEModel {
     pub fn load(vb: VarBuilder, config: &GTEConfig, model_type: ModelType) -> Result<Self> {
         match vb.device() {
-            Device::Cuda(_) => {}
-            _ => candle::bail!("FlashGTE requires Cuda"),
+            Device::Cuda(_) | Device::Vulkan(_) => {}
+            _ => candle::bail!("FlashGTE requires Cuda or Vulkan"),
         }
 
-        if vb.dtype() != DType::F16 {
-            candle::bail!("FlashGTE requires DType::F16")
+        if vb.dtype() != DType::F16 && vb.dtype() != DType::F32 {
+            candle::bail!("FlashGTE requires DType::F16 or DType::F32")
         }
 
         if config.logn_attention_clip1 {
@@ -215,11 +227,17 @@ impl FlashGTEModel {
             config.rope_scaling.as_ref(),
         )?;
 
+        // candle_rotary expects half-size cos/sin; the rotate-half `apply_rotary`
+        // fallback (used on Vulkan) expects the repeated (full head_size) form.
+        #[cfg(feature = "cuda")]
+        let repeat_freqs = false;
+        #[cfg(not(feature = "cuda"))]
+        let repeat_freqs = true;
         let (cos_cache, sin_cache) = get_cos_sin(
             config.max_position_embeddings,
             &inv_freqs,
             vb.dtype(),
-            false,
+            repeat_freqs,
         )?;
 
         Ok(Self {

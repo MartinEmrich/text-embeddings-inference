@@ -1,7 +1,7 @@
 mod alibi;
 #[cfg(feature = "cuda")]
 mod compute_cap;
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
 mod flash_attn;
 mod layers;
 mod models;
@@ -30,10 +30,11 @@ use crate::models::{
 };
 #[cfg(feature = "cuda")]
 use crate::models::{
-    FlashBertModel, FlashDistilBertModel, FlashGTEModel, FlashJinaBertModel,
-    FlashJinaCodeBertModel, FlashMistralModel, FlashModernBertModel, FlashNomicBertModel,
-    FlashQwen2Model, FlashQwen3Model,
+    FlashBertModel, FlashDistilBertModel, FlashJinaBertModel, FlashJinaCodeBertModel,
+    FlashMistralModel, FlashModernBertModel, FlashNomicBertModel, FlashQwen2Model,
 };
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
+use crate::models::{FlashGTEModel, FlashQwen3Model};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FlashAttn {
@@ -43,11 +44,6 @@ pub enum FlashAttn {
 
 #[allow(unused)]
 fn use_flash_attn(supported: &[FlashAttn]) -> bool {
-    #[cfg(not(feature = "cuda"))]
-    {
-        tracing::warn!("Flash Attention is not supported on CPU yet");
-        false
-    }
     #[cfg(feature = "cuda")]
     {
         if std::env::var("USE_FLASH_ATTENTION")
@@ -64,6 +60,20 @@ fn use_flash_attn(supported: &[FlashAttn]) -> bool {
                 }
             })
         }
+    }
+    // Vulkan flash attention is provided by `candle-flash-attn-vulkan`, always
+    // available when the `vulkan` feature is enabled.
+    #[cfg(all(feature = "vulkan", not(feature = "cuda")))]
+    {
+        std::env::var("USE_FLASH_ATTENTION")
+            .unwrap_or_else(|_| "True".to_string())
+            .to_lowercase()
+            == "true"
+    }
+    #[cfg(not(any(feature = "cuda", feature = "vulkan")))]
+    {
+        tracing::warn!("Flash Attention is not supported on CPU yet");
+        false
     }
 }
 
@@ -235,7 +245,10 @@ impl CandleBackend {
             .map_err(|err| BackendError::Start(format!("{err:?}")))?;
 
         // Get candle device
-        let device = if candle::utils::cuda_is_available() {
+        let device = if std::env::var("TEI_FORCE_CPU").is_ok() {
+            tracing::info!("TEI_FORCE_CPU is set, using CPU device");
+            Ok(Device::Cpu)
+        } else if candle::utils::cuda_is_available() {
             #[cfg(feature = "cuda")]
             match compatible_compute_cap() {
                 Ok(true) => Device::new_cuda(0),
@@ -256,6 +269,18 @@ impl CandleBackend {
             Ok(Device::Cpu)
         } else if candle::utils::metal_is_available() {
             Device::new_metal(0)
+        } else if candle::utils::vulkan_is_available() {
+            match Device::new_vulkan(0) {
+                Ok(device) => {
+                    tracing::info!("Using Vulkan device 0");
+                    Ok(device)
+                }
+                Err(err) => {
+                    tracing::warn!("Could not find a usable Vulkan device on host: {err:?}");
+                    tracing::warn!("Using CPU instead");
+                    Ok(Device::Cpu)
+                }
+            }
         } else {
             Ok(Device::Cpu)
         }
@@ -284,7 +309,7 @@ impl CandleBackend {
             (_, Device::Cuda(_)) => Err(BackendError::Start(
                 "`cuda` feature is not enabled".to_string(),
             )),
-            (Config::Bert(config), Device::Cpu | Device::Metal(_)) => match config {
+            (Config::Bert(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => match config {
                 BertConfigWrapper::JinaBert(config) => {
                     tracing::info!("Starting JinaBert model on {:?}", device);
                     Ok(Box::new(JinaBertModel::load(vb, &config, model_type).s()?))
@@ -300,26 +325,26 @@ impl CandleBackend {
                     Ok(Box::new(BertModel::load(vb, &config, model_type).s()?))
                 }
             },
-            (Config::DebertaV2(config), Device::Cpu | Device::Metal(_)) => {
+            (Config::DebertaV2(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 tracing::info!("Starting DebertaV2 model on {:?}", device);
                 Ok(Box::new(DebertaV2Model::load(vb, &config, model_type).s()?))
             }
             (
                 Config::Camembert(config) | Config::Roberta(config) | Config::XlmRoberta(config),
-                Device::Cpu | Device::Metal(_),
+                Device::Cpu | Device::Metal(_) | Device::Vulkan(_),
             ) => {
                 tracing::info!("Starting Bert model on {:?}", device);
                 Ok(Box::new(
                     BertModel::load_roberta(vb, &config, model_type).s()?,
                 ))
             }
-            (Config::DistilBert(config), Device::Cpu | Device::Metal(_)) => {
+            (Config::DistilBert(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 tracing::info!("Starting DistilBert model on {:?}", device);
                 Ok(Box::new(
                     DistilBertModel::load(vb, &config, model_type).s()?,
                 ))
             }
-            (Config::Gemma3(config), Device::Cpu | Device::Metal(_)) => {
+            (Config::Gemma3(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 // TODO(alvarobartt): Enable Flash Attention with BF16 once supported on Metal
                 if dtype != DType::F32 {
                     Err(BackendError::Start(
@@ -334,29 +359,44 @@ impl CandleBackend {
                 tracing::info!("Starting GTE model on {:?}", device);
                 Ok(Box::new(GTEModel::load(vb, &config, model_type).s()?))
             }
+            #[cfg(feature = "vulkan")]
+            (Config::Gte(config), Device::Vulkan(_)) => {
+                if use_flash_attn(&[FlashAttn::V2]) {
+                    tracing::info!("Starting FlashGTE model on {:?}", device);
+                    Ok(Box::new(FlashGTEModel::load(vb, &config, model_type).s()?))
+                } else {
+                    tracing::info!("Starting GTE model on {:?}", device);
+                    Ok(Box::new(GTEModel::load(vb, &config, model_type).s()?))
+                }
+            }
+            #[cfg(not(feature = "vulkan"))]
+            (Config::Gte(config), Device::Vulkan(_)) => {
+                tracing::info!("Starting GTE model on {:?}", device);
+                Ok(Box::new(GTEModel::load(vb, &config, model_type).s()?))
+            }
             (Config::MPNet(config), _) => {
                 tracing::info!("Starting MPNet model on {:?}", device);
                 Ok(Box::new(MPNetModel::load(vb, &config, model_type).s()?))
             }
-            (Config::Llama(_), Device::Cpu | Device::Metal(_)) => Err(BackendError::Start(
+            (Config::Llama(_), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => Err(BackendError::Start(
                 "Llama is only supported on Cuda devices in fp16 with flash attention enabled"
                     .to_string(),
             )),
-            (Config::Mistral(_), Device::Cpu | Device::Metal(_)) => Err(BackendError::Start(
+            (Config::Mistral(_), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => Err(BackendError::Start(
                 "Mistral is only supported on Cuda devices in fp16 with flash attention enabled"
                     .to_string(),
             )),
-            (Config::ModernBert(config), Device::Cpu | Device::Metal(_)) => {
+            (Config::ModernBert(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 tracing::info!("Starting ModernBert model on {:?}", device);
                 Ok(Box::new(
                     ModernBertModel::load(vb, &config, model_type).s()?,
                 ))
             }
-            (Config::NomicBert(config), Device::Cpu | Device::Metal(_)) => {
+            (Config::NomicBert(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 tracing::info!("Starting NomicBert model on {:?}", device);
                 Ok(Box::new(NomicBertModel::load(vb, &config, model_type).s()?))
             }
-            (Config::Qwen2(_), Device::Cpu | Device::Metal(_)) => Err(BackendError::Start(
+            (Config::Qwen2(_), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => Err(BackendError::Start(
                 "Qwen2 is only supported on Cuda devices in fp16 with flash attention enabled"
                     .to_string(),
             )),
@@ -364,7 +404,22 @@ impl CandleBackend {
                 tracing::info!("Starting Qwen3 model on {:?}", device);
                 Ok(Box::new(Qwen3Model::load(vb, &config, model_type).s()?))
             }
-            (Config::Pplx1(config), Device::Cpu | Device::Metal(_)) => {
+            #[cfg(feature = "vulkan")]
+            (Config::Qwen3(config), Device::Vulkan(_)) => {
+                if use_flash_attn(&[FlashAttn::V2]) {
+                    tracing::info!("Starting FlashQwen3 model on {:?}", device);
+                    Ok(Box::new(FlashQwen3Model::load(vb, &config, model_type).s()?))
+                } else {
+                    tracing::info!("Starting Qwen3 model on {:?}", device);
+                    Ok(Box::new(Qwen3Model::load(vb, &config, model_type).s()?))
+                }
+            }
+            #[cfg(not(feature = "vulkan"))]
+            (Config::Qwen3(config), Device::Vulkan(_)) => {
+                tracing::info!("Starting Qwen3 model on {:?}", device);
+                Ok(Box::new(Qwen3Model::load(vb, &config, model_type).s()?))
+            }
+            (Config::Pplx1(config), Device::Cpu | Device::Metal(_) | Device::Vulkan(_)) => {
                 // TODO(alvarobartt): Enable Flash Attention with BF16 once supported on Metal
                 if dtype != DType::F32 {
                     Err(BackendError::Start(

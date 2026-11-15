@@ -23,7 +23,7 @@ impl LayerNormNoBias {
         let _enter = self.span.enter();
 
         match hidden_states.device() {
-            Device::Cpu | Device::Metal(_) => {
+            Device::Cpu | Device::Metal(_) | Device::Vulkan(_) => {
                 let mut hidden_states = hidden_states.clone();
                 if let Some(residual) = residual {
                     hidden_states = hidden_states.add(residual)?;
@@ -105,7 +105,7 @@ impl LayerNorm {
         let _enter = self.span.enter();
 
         match hidden_states.device() {
-            Device::Cpu | Device::Metal(_) => {
+            Device::Cpu | Device::Metal(_) | Device::Vulkan(_) => {
                 let mut hidden_states = hidden_states.clone();
                 if let Some(residual) = residual {
                     hidden_states = hidden_states.add(residual)?;

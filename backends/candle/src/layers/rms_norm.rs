@@ -27,7 +27,7 @@ impl RMSNorm {
         let _enter = self.span.enter();
 
         match hidden_states.device() {
-            Device::Cpu | Device::Metal(_) => {
+            Device::Cpu | Device::Metal(_) | Device::Vulkan(_) => {
                 let mut hidden_states = hidden_states.clone();
                 let residual_add = if let Some(residual) = residual {
                     let residual_add = hidden_states.add(residual)?;

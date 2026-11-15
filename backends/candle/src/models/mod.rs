@@ -30,7 +30,7 @@ mod flash_bert;
 #[cfg(feature = "cuda")]
 mod flash_distilbert;
 
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
 mod flash_gte;
 
 #[cfg(feature = "cuda")]
@@ -51,7 +51,7 @@ mod flash_nomic;
 #[cfg(feature = "cuda")]
 mod flash_qwen2;
 
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
 mod flash_qwen3;
 
 pub use bert::{BertConfig, BertModel, PositionEmbeddingType};
@@ -77,7 +77,7 @@ pub use flash_bert::FlashBertModel;
 #[cfg(feature = "cuda")]
 pub use flash_distilbert::FlashDistilBertModel;
 
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
 pub use flash_gte::FlashGTEModel;
 
 #[cfg(feature = "cuda")]
@@ -98,7 +98,7 @@ pub use flash_nomic::FlashNomicBertModel;
 #[cfg(feature = "cuda")]
 pub use flash_qwen2::FlashQwen2Model;
 
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "vulkan"))]
 pub use flash_qwen3::FlashQwen3Model;
 
 pub(crate) trait Model {
