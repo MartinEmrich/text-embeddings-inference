@@ -112,6 +112,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash"
+version = "0.38.0+1.3.281"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "async-channel"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -463,12 +472,14 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 [[package]]
 name = "candle-core"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "accelerate-src",
+ "ash",
  "byteorder",
  "candle-kernels",
  "candle-metal-kernels",
+ "candle-vulkan-kernels",
  "cudarc",
  "gemm 0.17.1",
  "half",
@@ -504,7 +515,7 @@ dependencies = [
 [[package]]
 name = "candle-flash-attn"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "anyhow",
  "bindgen_cuda",
@@ -526,6 +537,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "candle-flash-attn-vulkan"
+version = "0.8.4"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+dependencies = [
+ "candle-core",
+]
+
+[[package]]
 name = "candle-index-select-cu"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -541,7 +560,7 @@ dependencies = [
 [[package]]
 name = "candle-kernels"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "bindgen_cuda",
 ]
@@ -562,7 +581,7 @@ dependencies = [
 [[package]]
 name = "candle-metal-kernels"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "metal 0.27.0",
  "once_cell",
@@ -573,7 +592,7 @@ dependencies = [
 [[package]]
 name = "candle-nn"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "accelerate-src",
  "candle-core",
@@ -602,7 +621,7 @@ dependencies = [
 [[package]]
 name = "candle-transformers"
 version = "0.8.4"
-source = "git+https://github.com/huggingface/candle?rev=6381023982251959a2c9bab7378b3013304e192b#6381023982251959a2c9bab7378b3013304e192b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 dependencies = [
  "byteorder",
  "candle-core",
@@ -616,6 +635,11 @@ dependencies = [
  "serde_plain",
  "tracing",
 ]
+
+[[package]]
+name = "candle-vulkan-kernels"
+version = "0.8.4"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
 
 [[package]]
 name = "castaway"
@@ -4729,6 +4753,7 @@ dependencies = [
  "candle-cublaslt",
  "candle-flash-attn",
  "candle-flash-attn-v1",
+ "candle-flash-attn-vulkan",
  "candle-index-select-cu",
  "candle-layer-norm",
  "candle-nn",
