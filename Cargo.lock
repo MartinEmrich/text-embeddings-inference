@@ -472,7 +472,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 [[package]]
 name = "candle-core"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "accelerate-src",
  "ash",
@@ -515,7 +515,7 @@ dependencies = [
 [[package]]
 name = "candle-flash-attn"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "anyhow",
  "bindgen_cuda",
@@ -539,7 +539,7 @@ dependencies = [
 [[package]]
 name = "candle-flash-attn-vulkan"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "candle-core",
 ]
@@ -560,7 +560,7 @@ dependencies = [
 [[package]]
 name = "candle-kernels"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "bindgen_cuda",
 ]
@@ -581,7 +581,7 @@ dependencies = [
 [[package]]
 name = "candle-metal-kernels"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "metal 0.27.0",
  "once_cell",
@@ -592,7 +592,7 @@ dependencies = [
 [[package]]
 name = "candle-nn"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "accelerate-src",
  "candle-core",
@@ -621,7 +621,7 @@ dependencies = [
 [[package]]
 name = "candle-transformers"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 dependencies = [
  "byteorder",
  "candle-core",
@@ -639,7 +639,7 @@ dependencies = [
 [[package]]
 name = "candle-vulkan-kernels"
 version = "0.8.4"
-source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#2b492b13ee00700b64f8ef6a71948e20135dd65b"
+source = "git+https://github.com/MartinEmrich/candle?branch=candle-vulkan#ee31a7ec8410979892b9376ea8c68259c2ded7cc"
 
 [[package]]
 name = "castaway"
