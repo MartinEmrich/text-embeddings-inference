@@ -167,14 +167,11 @@ fn test_vulkan_gte_f16_matches_cpu_f32() -> Result<()> {
     Ok(())
 }
 
-/// End-to-end memory smoke test for the deferred-batch byte-budget flush: run a
-/// full GTE forward at a large multi-sequence batch (default 2 x 2048 tokens).
-/// The strong OOM regression guard is the candle-core `vulkan_batch_mem_tests`
-/// (12GB logical chain); this exercises the same flush path through the real
-/// model. Larger sequences are not used here because a single flash-attention
-/// launch at seq >= ~3072 currently exceeds the amdgpu scheduler job timeout and
-/// trips a GPU soft-recovery (separate, known FA-performance issue).
-/// Override with GTE_TEST_SEQ / GTE_TEST_DTYPE for investigation.
+/// End-to-end memory + flash-attention guard: run a full GTE forward at the
+/// router's default warmup size (two 8192-token sequences = max_batch_tokens
+/// 16384). Before the deferred-batch byte budget this OOM'd; before the tiled FA
+/// kernel the flash-attention launch tripped the amdgpu job timeout. Override
+/// with GTE_TEST_SEQ / GTE_TEST_DTYPE for investigation.
 #[test]
 #[serial_test::serial]
 #[cfg(feature = "vulkan")]
@@ -189,7 +186,7 @@ fn test_vulkan_gte_warmup_sized_batch() -> Result<()> {
         None,
     )?;
 
-    let seq = std::env::var("GTE_TEST_SEQ").ok().and_then(|s| s.parse().ok()).unwrap_or(2048usize);
+    let seq = std::env::var("GTE_TEST_SEQ").ok().and_then(|s| s.parse().ok()).unwrap_or(8192usize);
     let total = 2 * seq;
     let input_ids = vec![0u32; total];
     let token_type_ids = vec![0u32; total];
