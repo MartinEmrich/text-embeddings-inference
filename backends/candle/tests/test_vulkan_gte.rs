@@ -4,7 +4,7 @@ use anyhow::Result;
 use common::{batch, load_tokenizer, sort_embeddings};
 use std::path::PathBuf;
 use text_embeddings_backend_candle::CandleBackend;
-use text_embeddings_backend_core::{Backend, ModelType, Pool};
+use text_embeddings_backend_core::{Backend, Batch, ModelType, Pool};
 
 fn model_root() -> PathBuf {
     std::env::var("TEI_TEST_MODEL")
@@ -164,5 +164,54 @@ fn test_vulkan_gte_f16_matches_cpu_f32() -> Result<()> {
         println!("f16 single[{i}] cos={cos:.6}");
         anyhow::ensure!(cos > 0.999, "f16 single cosine too low for {i}: {cos}");
     }
+    Ok(())
+}
+
+/// End-to-end memory smoke test for the deferred-batch byte-budget flush: run a
+/// full GTE forward at a large multi-sequence batch (default 2 x 2048 tokens).
+/// The strong OOM regression guard is the candle-core `vulkan_batch_mem_tests`
+/// (12GB logical chain); this exercises the same flush path through the real
+/// model. Larger sequences are not used here because a single flash-attention
+/// launch at seq >= ~3072 currently exceeds the amdgpu scheduler job timeout and
+/// trips a GPU soft-recovery (separate, known FA-performance issue).
+/// Override with GTE_TEST_SEQ / GTE_TEST_DTYPE for investigation.
+#[test]
+#[serial_test::serial]
+#[cfg(feature = "vulkan")]
+fn test_vulkan_gte_warmup_sized_batch() -> Result<()> {
+    let root = model_root();
+    anyhow::ensure!(root.join("model.safetensors").exists(), "model not found at {root:?}");
+
+    let vk = CandleBackend::new(
+        &root,
+        std::env::var("GTE_TEST_DTYPE").unwrap_or_else(|_| "float16".to_string()),
+        ModelType::Embedding(Pool::Cls),
+        None,
+    )?;
+
+    let seq = std::env::var("GTE_TEST_SEQ").ok().and_then(|s| s.parse().ok()).unwrap_or(2048usize);
+    let total = 2 * seq;
+    let input_ids = vec![0u32; total];
+    let token_type_ids = vec![0u32; total];
+    let mut position_ids = Vec::with_capacity(total);
+    for _ in 0..2 {
+        position_ids.extend(0..seq as u32);
+    }
+    let b = Batch {
+        input_ids,
+        token_type_ids,
+        position_ids,
+        cumulative_seq_lengths: vec![0, seq as u32, total as u32],
+        max_length: seq as u32,
+        pooled_indices: vec![0, 1],
+        raw_indices: vec![],
+    };
+
+    let t0 = std::time::Instant::now();
+    let (emb, raw) = sort_embeddings(vk.embed(b)?);
+    println!("warmup-sized batch ({} tokens) took {:?}", total, t0.elapsed());
+    anyhow::ensure!(emb.len() == 2, "expected 2 pooled embeddings, got {}", emb.len());
+    anyhow::ensure!(!emb[0].is_empty(), "empty embedding");
+    anyhow::ensure!(raw.is_empty() || raw.first().map(|r| !r.is_empty()).unwrap_or(true));
     Ok(())
 }
