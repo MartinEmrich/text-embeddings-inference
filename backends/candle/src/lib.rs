@@ -708,6 +708,10 @@ impl Backend for CandleBackend {
         self.model.is_padded()
     }
 
+    fn is_vulkan(&self) -> bool {
+        matches!(self.device, Device::Vulkan(_))
+    }
+
     fn embed(&self, batch: Batch) -> Result<Embeddings, BackendError> {
         let batch_size = batch.len();
         let pooled_indices = batch.pooled_indices.clone();

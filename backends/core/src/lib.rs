@@ -42,6 +42,16 @@ pub trait Backend {
 
     fn is_padded(&self) -> bool;
 
+    /// Whether the backend runs on a Vulkan device. The Vulkan warmup sizes its startup
+    /// forward to a small representative batch instead of a full `max_batch_tokens`
+    /// forward: the kernels take `m, n, k` as push constants, so every pipeline compiles
+    /// from a tiny shape, and a full-size forward is prohibitively slow on weak iGPUs
+    /// (e.g. a single 8192-token Qwen3 forward is minutes on an N100). Defaults to `false`
+    /// so CPU/CUDA/Metal/ONNX warmup behavior is byte-for-byte unchanged.
+    fn is_vulkan(&self) -> bool {
+        false
+    }
+
     fn embed(&self, batch: Batch) -> Result<Embeddings, BackendError>;
 
     fn predict(&self, batch: Batch) -> Result<Predictions, BackendError>;

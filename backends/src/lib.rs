@@ -85,6 +85,7 @@ pub struct Backend {
     pub padded_model: bool,
     pub max_batch_size: Option<usize>,
     pub model_type: ModelType,
+    is_vulkan: bool,
 }
 
 impl Backend {
@@ -116,6 +117,7 @@ impl Backend {
         .await?;
         let padded_model = backend.is_padded();
         let max_batch_size = backend.max_batch_size();
+        let is_vulkan = backend.is_vulkan();
 
         let (health_sender, health_receiver) = watch::channel(false);
         let _backend_thread =
@@ -128,6 +130,7 @@ impl Backend {
             padded_model,
             max_batch_size,
             model_type,
+            is_vulkan,
         })
     }
 
@@ -322,7 +325,18 @@ impl Backend {
 
         // In padded_model (CPU), use minimal warmup size (max_input_length tokens) for fast startup
         // Non-padded (GPU), use full max_batch_tokens to exercise production batching limits
-        let warmup_tokens = if padded_model {
+        // Vulkan: kernels take m, n, k as push constants, so every pipeline compiles from a
+        // tiny shape; a full max_batch_tokens forward is minutes on weak iGPUs (e.g. a single
+        // 8192-token Qwen3 forward on an N100). Warm up with a small representative batch
+        // instead (override with MAX_WARMUP_BATCH_TOKENS). All other backends are unchanged.
+        let warmup_tokens = if self.is_vulkan {
+            let default = 512usize;
+            let representative = std::env::var("MAX_WARMUP_BATCH_TOKENS")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(default);
+            representative.min(max_batch_tokens).max(1)
+        } else if padded_model {
             max_input_length.min(max_batch_tokens)
         } else {
             max_batch_tokens
@@ -1076,6 +1090,7 @@ mod tests {
             padded_model: false,
             max_batch_size: None,
             model_type: ModelType::Embedding(Pool::Cls),
+            is_vulkan: false,
         }
     }
 
